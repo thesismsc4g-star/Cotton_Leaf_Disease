@@ -13,3 +13,4 @@ streamlit
 groq
 python-dotenv
 pypdf
+opencv-python-headless
