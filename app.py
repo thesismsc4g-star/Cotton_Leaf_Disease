@@ -1,9 +1,19 @@
 # ===== app.py =====
 import streamlit as st
 from PIL import Image
+import sys
+import os
+
+# 🔥 FIX: ensure correct path
+sys.path.append(os.path.dirname(__file__))
 
 import config
-from predict import load_predictor
+
+# 🔥 IMPORTANT: change import (based on your structure)
+try:
+    from src.predict import load_predictor   # ✅ যদি src folder এ থাকে
+except:
+    from predict import load_predictor       # fallback
 
 
 # ==============================
