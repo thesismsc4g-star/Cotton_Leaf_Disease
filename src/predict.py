@@ -26,8 +26,9 @@ def download_model_if_needed(model_path: str):
     if not os.path.exists(model_path):
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
 
-        FILE_ID = "YOUR_FILE_ID"  # 🔥 change this
-        url = f"https://drive.google.com/uc?id={FILE_ID}"
+        FILE_ID = "1mWD-qjyaE8Ti6JK3VsqcGDe9i1daEX9E"
+
+        url = f"https://drive.google.com/uc?export=download&id={FILE_ID}"
 
         print("⬇️ Downloading model...")
         gdown.download(url, model_path, quiet=False, fuzzy=True)
