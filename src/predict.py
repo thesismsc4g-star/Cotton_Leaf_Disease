@@ -1,0 +1,72 @@
+from typing import Dict, Tuple
+
+import cv2
+import numpy as np
+from PIL import Image
+import torch
+import torch.nn.functional as F
+from transformers import AutoProcessor
+
+import config
+from prompts import CLASS_NAMES, ORDERED_TEXT_PROMPTS, pretty_class_name
+from src.data import build_transforms, load_image_for_model
+from src.modeling import ConvNeXtGCN_CLIP
+
+
+class CottonLeafPredictor:
+    def __init__(self, weights_path: str) -> None:
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.processor = AutoProcessor.from_pretrained(config.CLIP_MODEL_NAME)
+        _, self.eval_transform, _, _ = build_transforms()
+        self.model = ConvNeXtGCN_CLIP(
+            class_names=CLASS_NAMES,
+            text_prompts=ORDERED_TEXT_PROMPTS,
+            processor=self.processor,
+            device=self.device,
+            pretrained=True,
+            gcn_hidden=256,
+            dropout=0.3,
+            freeze_backbone=False,
+            freeze_text_encoder=True,
+            cls_loss_weight=1.0,
+            contrastive_weight=1.0,
+            text_proto_cls_weight=0.3,
+        ).to(self.device)
+
+        state = torch.load(weights_path, map_location=self.device)
+        self.model.load_state_dict(state)
+        self.model.eval()
+
+    @torch.no_grad()
+    def predict(self, image_pil: Image.Image) -> Dict:
+        x = load_image_for_model(image_pil, self.eval_transform).to(self.device)
+        outputs = self.model(x, return_attention=True)
+        logits = outputs["contrastive_logits"] + outputs["class_logits"]
+        probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
+        pred_idx = int(np.argmax(probs))
+        class_name = CLASS_NAMES[pred_idx]
+
+        attention = outputs["node_attention"][0].reshape(7, 7).cpu().numpy()
+        attention = (attention - attention.min()) / (attention.max() - attention.min() + 1e-8)
+
+        overlay = self._make_attention_overlay(image_pil, attention)
+
+        return {
+            "class_name": class_name,
+            "class_label": pretty_class_name(class_name),
+            "probabilities": probs,
+            "pred_idx": pred_idx,
+            "overlay": overlay,
+        }
+
+    def _make_attention_overlay(self, image_pil: Image.Image, attention: np.ndarray) -> np.ndarray:
+        rgb = np.array(image_pil.convert("RGB").resize(config.IMAGE_SIZE)).astype(np.float32) / 255.0
+        attn_resized = cv2.resize(attention, (rgb.shape[1], rgb.shape[0]), interpolation=cv2.INTER_CUBIC)
+        heatmap = cv2.applyColorMap(np.uint8(255 * attn_resized), cv2.COLORMAP_JET)
+        heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+        overlay = np.clip(0.6 * rgb + 0.4 * heatmap, 0, 1)
+        return (overlay * 255).astype(np.uint8)
+
+
+def load_predictor(weights_path: str) -> CottonLeafPredictor:
+    return CottonLeafPredictor(weights_path)
