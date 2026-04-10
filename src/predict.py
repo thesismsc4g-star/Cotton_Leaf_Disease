@@ -1,9 +1,10 @@
 from typing import Dict
+import os
+import gdown
 
 import numpy as np
 from PIL import Image
 import torch
-import torch.nn.functional as F
 from transformers import AutoProcessor
 
 # 🔥 Safe OpenCV import
@@ -18,8 +19,29 @@ from src.data import build_transforms, load_image_for_model
 from src.modeling import ConvNeXtGCN_CLIP
 
 
+# 🔥 GOOGLE DRIVE DOWNLOAD FUNCTION
+def download_model_if_needed(model_path: str):
+    if not os.path.exists(model_path):
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
+
+        # 👉 এখানে তোমার Google Drive FILE ID বসাও
+        FILE_ID = "YOUR_FILE_ID"
+        url = f"https://drive.google.com/uc?id={FILE_ID}"
+
+        print("⬇️ Downloading model from Google Drive...")
+        gdown.download(url, model_path, quiet=False)
+        print("✅ Model download complete!")
+
+
 class CottonLeafPredictor:
     def __init__(self, weights_path: str) -> None:
+
+        # 🔥 IMPORTANT: download before load
+        download_model_if_needed(weights_path)
+
+        print("MODEL PATH:", weights_path)
+        print("FILE EXISTS:", os.path.exists(weights_path))
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.processor = AutoProcessor.from_pretrained(config.CLIP_MODEL_NAME)
@@ -40,6 +62,7 @@ class CottonLeafPredictor:
             text_proto_cls_weight=0.3,
         ).to(self.device)
 
+        # 🔥 LOAD MODEL
         state = torch.load(weights_path, map_location=self.device)
         self.model.load_state_dict(state)
         self.model.eval()
@@ -70,17 +93,16 @@ class CottonLeafPredictor:
             "overlay": overlay,
         }
 
-    # 🔥 SAFE overlay function
     def _make_attention_overlay(
         self, image_pil: Image.Image, attention: np.ndarray
     ) -> np.ndarray:
+
         rgb = (
             np.array(image_pil.convert("RGB").resize(config.IMAGE_SIZE))
             .astype(np.float32)
             / 255.0
         )
 
-        # ❗ If cv2 না থাকে → fallback (NO crash)
         if cv2 is None:
             return (rgb * 255).astype(np.uint8)
 
@@ -103,7 +125,6 @@ class CottonLeafPredictor:
             return (overlay * 255).astype(np.uint8)
 
         except Exception:
-            # ❗ Any error হলে fallback
             return (rgb * 255).astype(np.uint8)
 
 
