@@ -9,7 +9,6 @@ BASE_DIR = Path(__file__).resolve().parent
 # -----------------------------
 DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
 
-# Dataset (optional for deployment)
 DATASET_DIR = Path(
     os.getenv("DATASET_DIR", DATA_DIR / "Cotton_Augmented_Dataset")
 )
@@ -17,12 +16,9 @@ DATASET_DIR = Path(
 # -----------------------------
 # 🧠 MODEL PATH
 # -----------------------------
-# Local path where model will be downloaded
-MODEL_WEIGHTS = Path(
-    os.getenv(
-        "MODEL_WEIGHTS",
-        BASE_DIR / "models" / "convnext_gcn_clip_cotton_leaf.pth",
-    )
+MODEL_WEIGHTS = os.getenv(
+    "MODEL_WEIGHTS",
+    str(BASE_DIR / "models" / "cotton_model.pth"),  # 🔥 renamed clean
 )
 
 # -----------------------------
