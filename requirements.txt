@@ -1,0 +1,16 @@
+torch
+torchvision
+transformers
+scikit-learn
+numpy
+pandas
+pillow
+opencv-python
+tqdm
+seaborn
+matplotlib
+gdown
+streamlit
+groq
+python-dotenv
+pypdf
