@@ -58,7 +58,7 @@ class CottonLeafPredictor:
             processor=self.processor,
             device=self.device,
             pretrained=False,  # 🔥 important
-            gcn_hidden=128,
+            gcn_hidden=256,
             dropout=0.1,
             freeze_backbone=True,
             freeze_text_encoder=True,
