@@ -1,6 +1,7 @@
 import os
 import re
 from pathlib import Path
+import traceback
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -40,14 +41,35 @@ def download_model_if_needed():
     return model_path
 
 
-# ✅ Load model path (auto-download)
+# ==============================
+# 🔥 SAFE LOAD WITH DEBUG
+# ==============================
 @st.cache_resource
 def get_model_path():
     return download_model_if_needed()
 
 
+@st.cache_resource
+def get_predictor(path: Path):
+    try:
+        st.write("🔄 Loading model...")
+        predictor = load_predictor(str(path))
+        st.write("✅ Model loaded successfully")
+        return predictor
+    except Exception as e:
+        st.error("❌ Model loading failed")
+        st.text(traceback.format_exc())
+        raise e
+
+
+@st.cache_resource
+def get_rag_index(path: Path):
+    return build_rag_index(path)
+
+
 weights_path = get_model_path()
 kb_dir = Path(os.getenv("KB_DIR", config.KB_DIR))
+
 
 # ==============================
 # 🔍 KEYWORDS
@@ -66,34 +88,16 @@ PREVENT_KEYWORDS = (
 if not kb_dir.exists():
     st.warning(f"Knowledge base directory not found: {kb_dir}")
 
-# ==============================
-# ⚡ CACHE MODELS
-# ==============================
-@st.cache_resource
-def get_predictor(path: Path):
-    return load_predictor(str(path))
-
-
-@st.cache_resource
-def get_rag_index(path: Path):
-    return build_rag_index(path)
-
-
-def groq_enabled() -> bool:
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
-    enabled = os.getenv("ENABLE_GROQ", "true").strip().lower()
-    return bool(api_key) and enabled not in {"0", "false", "no", "off"}
-
 
 # ==============================
 # 🧠 TEXT PROCESSING
 # ==============================
-def _split_sentences(text: str) -> list[str]:
+def _split_sentences(text: str):
     parts = re.split(r"(?<=[.!?])\s+", text.strip())
     return [p.strip() for p in parts if p.strip()]
 
 
-def rule_based_summary(context: str) -> dict:
+def rule_based_summary(context: str):
     cause, prevent, other = [], [], []
 
     for sentence in _split_sentences(context):
@@ -114,6 +118,12 @@ def rule_based_summary(context: str) -> dict:
         "cause": cause or other,
         "prevention": prevent or other,
     }
+
+
+def groq_enabled() -> bool:
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    enabled = os.getenv("ENABLE_GROQ", "true").strip().lower()
+    return bool(api_key) and enabled not in {"0", "false", "no", "off"}
 
 
 # ==============================
@@ -138,92 +148,103 @@ with col2:
 # 🚀 MAIN PIPELINE
 # ==============================
 if uploaded_file:
-    image = Image.open(uploaded_file).convert("RGB")
-    st.image(image, caption="Input Image", use_container_width=True)
+    try:
+        st.write("📥 Image received")
 
-    with st.spinner("Running model..."):
-        predictor = get_predictor(weights_path)
-        result = predictor.predict(image)
+        image = Image.open(uploaded_file).convert("RGB")
 
-    # ------------------------------
-    # 📊 Prediction
-    # ------------------------------
-    st.subheader("Prediction")
-    pred_label = result["class_label"]
-    pred_idx = result["pred_idx"]
-    probs = result["probabilities"]
+        # 🔥 FIXED (IMPORTANT)
+        st.image(image, caption="Input Image", width="stretch")
 
-    st.write(f"**{pred_label}** ({probs[pred_idx] * 100:.2f}% confidence)")
+        with st.spinner("Running model..."):
+            predictor = get_predictor(weights_path)
+            result = predictor.predict(image)
 
-    topk = sorted(
-        [(CLASS_NAMES[i], probs[i]) for i in range(len(CLASS_NAMES))],
-        key=lambda x: x[1],
-        reverse=True,
-    )[:5]
+        # ------------------------------
+        # 📊 Prediction
+        # ------------------------------
+        st.subheader("Prediction")
+        pred_label = result["class_label"]
+        pred_idx = result["pred_idx"]
+        probs = result["probabilities"]
 
-    st.table(
-        {
-            "Class": [pretty_class_name(c) for c, _ in topk],
-            "Confidence": [f"{p * 100:.2f}%" for _, p in topk],
-        }
-    )
+        st.write(f"**{pred_label}** ({probs[pred_idx] * 100:.2f}% confidence)")
 
-    # ------------------------------
-    # 🔥 Attention Map
-    # ------------------------------
-    st.subheader("Text-conditioned Attention Overlay")
-    st.image(result["overlay"], use_container_width=True)
+        topk = sorted(
+            [(CLASS_NAMES[i], probs[i]) for i in range(len(CLASS_NAMES))],
+            key=lambda x: x[1],
+            reverse=True,
+        )[:5]
 
-    # ------------------------------
-    # 📚 RAG + Groq
-    # ------------------------------
-    st.subheader("Management Guidance (RAG + Groq)")
-
-    rag_index = get_rag_index(kb_dir)
-    query = f"{pred_label}. {user_question}"
-    chunks = rag_index.query(query, top_k=3)
-
-    if not chunks:
-        st.info("No knowledge base documents found.")
-    else:
-        context = "\n\n".join(
-            [f"Source: {c.source}\n{c.text}" for c in chunks]
+        st.table(
+            {
+                "Class": [pretty_class_name(c) for c, _ in topk],
+                "Confidence": [f"{p * 100:.2f}%" for _, p in topk],
+            }
         )
 
-        groq_model = os.getenv("GROQ_MODEL", config.GROQ_MODEL)
+        # ------------------------------
+        # 🔥 Attention Map
+        # ------------------------------
+        st.subheader("Attention Overlay")
 
-        if groq_enabled():
-            try:
-                response = generate_response(
-                    groq_model,
-                    [
-                        {
-                            "role": "system",
-                            "content": "You are an agronomy assistant. Provide clear cause and prevention steps.",
-                        },
-                        {
-                            "role": "user",
-                            "content": (
-                                f"Disease: {pred_label}\n\n"
-                                f"Question: {user_question}\n\n"
-                                f"Context:\n{context}"
-                            ),
-                        },
-                    ],
-                )
-                st.write(response)
+        # 🔥 FIXED
+        st.image(result["overlay"], width="stretch")
 
-            except Exception as exc:
-                st.error(f"Groq request failed: {exc}")
+        # ------------------------------
+        # 📚 RAG + Groq
+        # ------------------------------
+        st.subheader("Management Guidance")
 
+        rag_index = get_rag_index(kb_dir)
+        query = f"{pred_label}. {user_question}"
+        chunks = rag_index.query(query, top_k=3)
+
+        if not chunks:
+            st.info("No knowledge base documents found.")
         else:
-            summary = rule_based_summary(context)
+            context = "\n\n".join(
+                [f"Source: {c.source}\n{c.text}" for c in chunks]
+            )
 
-            st.subheader("Cause")
-            st.markdown("\n".join(f"- {s}" for s in summary["cause"]))
+            groq_model = os.getenv("GROQ_MODEL", config.GROQ_MODEL)
 
-            st.subheader("Prevention / Management")
-            st.markdown("\n".join(f"- {s}" for s in summary["prevention"]))
+            if groq_enabled():
+                try:
+                    response = generate_response(
+                        groq_model,
+                        [
+                            {
+                                "role": "system",
+                                "content": "You are an agronomy assistant. Provide clear cause and prevention steps.",
+                            },
+                            {
+                                "role": "user",
+                                "content": (
+                                    f"Disease: {pred_label}\n\n"
+                                    f"Question: {user_question}\n\n"
+                                    f"Context:\n{context}"
+                                ),
+                            },
+                        ],
+                    )
+                    st.write(response)
 
-            with st.expander("Raw Context"):
-                st.write(context)
+                except Exception as exc:
+                    st.error(f"Groq request failed: {exc}")
+
+            else:
+                summary = rule_based_summary(context)
+
+                st.subheader("Cause")
+                st.markdown("\n".join(f"- {s}" for s in summary["cause"]))
+
+                st.subheader("Prevention")
+                st.markdown("\n".join(f"- {s}" for s in summary["prevention"]))
+
+                with st.expander("Raw Context"):
+                    st.write(context)
+
+    except Exception as e:
+        st.error("❌ App crashed أثناء execution")
+        st.text(traceback.format_exc())
