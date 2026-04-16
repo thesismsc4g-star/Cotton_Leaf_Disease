@@ -9,11 +9,13 @@ sys.path.append(os.path.dirname(__file__))
 
 import config
 
-# 🔥 IMPORTANT: change import (based on your structure)
+# 🔥 IMPORTS
 try:
-    from src.predict import load_predictor   # ✅ যদি src folder এ থাকে
+    from src.predict import load_predictor
+    from prompts import CLASS_NAMES, pretty_class_name
 except:
-    from predict import load_predictor       # fallback
+    from predict import load_predictor
+    from prompts import CLASS_NAMES, pretty_class_name
 
 
 # ==============================
@@ -61,7 +63,8 @@ if uploaded_file is not None:
 
     image = Image.open(uploaded_file).convert("RGB")
 
-    st.image(image, caption="📷 Uploaded Image", use_column_width=True)
+    # 🔥 UPDATED (new Streamlit syntax)
+    st.image(image, caption="📷 Uploaded Image", width="stretch")
 
     # ==============================
     # 🔍 PREDICTION
@@ -72,17 +75,22 @@ if uploaded_file is not None:
     st.success(f"🌱 Prediction: {result['class_label']}")
 
     # ==============================
-    # 📊 PROBABILITIES
+    # 📊 PROBABILITIES (FIXED)
     # ==============================
     st.subheader("📊 Class Probabilities")
+
     probs = result["probabilities"]
 
     for i, prob in enumerate(probs):
-        st.write(f"Class {i}: {prob:.4f}")
+        class_name = CLASS_NAMES[i]
+        display_name = pretty_class_name(class_name)
+
+        st.write(f"{display_name}: {prob*100:.2f}%")
+        st.progress(float(prob))
 
     # ==============================
     # 🔥 ATTENTION MAP
     # ==============================
     if result.get("overlay") is not None:
         st.subheader("🔥 Attention Map")
-        st.image(result["overlay"], use_column_width=True)
+        st.image(result["overlay"], width="stretch")
