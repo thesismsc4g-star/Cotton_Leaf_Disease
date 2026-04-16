@@ -1,54 +1,64 @@
-# Cotton Leaf Disease Classification (ConvNeXt-GCN-CLIP)
+# 🌿 Cotton Leaf Disease Classification (Streamlit App)
 
-This project trains and deploys a ConvNeXt-GCN based CLIP model for cotton leaf disease classification, then serves predictions with a Streamlit app and RAG + Groq guidance.
+This project is a deep learning–based web application for **cotton leaf disease classification** using a trained **ConvNeXt-GCN + CLIP model**.  
+Users can upload a cotton leaf image and instantly get the predicted disease along with confidence scores and attention visualization.
 
-## Project Structure
+---
 
-- app.py: Streamlit app
-- scripts/download_dataset.py: Download dataset via gdown
-- scripts/train.py: Train and export model weights
-- models/: model weights
-- knowledge_base/: management strategy docs (RAG)
-- src/: model, data, RAG, and Groq helpers
+## 🚀 Features
 
-## Setup
+- 🌿 Image-based cotton leaf disease classification  
+- 🤖 Pre-trained ConvNeXt-GCN + CLIP model  
+- 📊 Class probability scores  
+- 🔥 Attention map visualization  
+- ⚡ Fast inference (no training required)  
+- ☁️ Deployable on Streamlit Cloud  
 
-1. Create a virtual environment
-2. Install requirements:
+---
 
-```bash
-pip install -r requirements.txt
+## 🧠 Model
+
+- Architecture: **ConvNeXt + GCN + CLIP**
+- Input size: `224 × 224`
+- Output classes:
+  - Alternaria Leaf Spot  
+  - Bacterial Blight  
+  - Fusarium Wilt  
+  - Healthy Leaf  
+  - Verticillium Wilt  
+
+---
+
+## 📂 Project Structure
+
+```
+project/
+│
+├── app.py              # Streamlit UI
+├── config.py           # Configurations (paths, model)
+├── predict.py          # Model loading & inference
+├── prompts.py          # Class names & labels
+├── requirements.txt    # Dependencies
+│
+└── src/
+    ├── modeling.py     # Model architecture
+    └── data.py         # Image preprocessing
 ```
 
-3. Create a `.env` file using `.env.example`:
-
+## ☁️ Deployment (Streamlit Cloud)
 ```
-GROQ_API_KEY=your_key
-GROQ_MODEL=llama3-70b-8192
-MODEL_WEIGHTS=f:/Thesis/models/convnext_gcn_clip_cotton_leaf.pth
-DATASET_DIR=f:/Thesis/data/Cotton_Augmented_Dataset
-KB_DIR=f:/Thesis/knowledge_base
+Upload this project to GitHub
+The model is automatically downloaded from Google Drive
+Make sure:
+Model link is public (Anyone with the link)
+requirements.txt is correct
 ```
-
-## Download Dataset (gdown)
-
-```bash
-python scripts/download_dataset.py
+## 📤 Usage
 ```
-
-## Train Model
-
-```bash
-python scripts/train.py --epochs 20 --batch-size 32
+Upload a cotton leaf image
+The model predicts the disease
+View:
+✅ Predicted disease name
+📊 Confidence scores
+🔥 Attention heatmap
 ```
-
-## Run Streamlit App
-
-```bash
-streamlit run app.py
-```
-
-## Notes
-
-- If gdown fails, download the dataset zip manually and extract to `data/Cotton_Augmented_Dataset`.
-- Update knowledge_base with your management strategy files (txt, md, pdf).
