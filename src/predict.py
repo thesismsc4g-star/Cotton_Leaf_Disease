@@ -22,22 +22,27 @@ from src.data import build_transforms, load_image_for_model
 from src.modeling import ConvNeXtGCN_CLIP
 
 
+# ==============================
+# 🔥 GOOGLE DRIVE DOWNLOAD FIXED
+# ==============================
 def download_model_if_needed(model_path: str):
     if not os.path.exists(model_path):
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
 
         FILE_ID = "1mWD-qjyaE8Ti6JK3VsqcGDe9i1daEX9E"
 
-        url = f"https://drive.google.com/uc?export=download&id={FILE_ID}"
+        # ✅ Correct direct download link
+        url = f"https://drive.google.com/uc?id={FILE_ID}"
 
         print("⬇️ Downloading model...")
-        gdown.download(url, model_path, quiet=False, fuzzy=True)
+        gdown.download(url, model_path, quiet=False)  # ❌ fuzzy removed
         print("✅ Download complete!")
 
 
 class CottonLeafPredictor:
     def __init__(self, weights_path: str):
 
+        # 🔥 download first
         download_model_if_needed(weights_path)
 
         print("MODEL PATH:", weights_path)
@@ -52,13 +57,14 @@ class CottonLeafPredictor:
 
         _, self.eval_transform, _, _ = build_transforms()
 
+        # 🔥 IMPORTANT: match training config
         self.model = ConvNeXtGCN_CLIP(
             class_names=CLASS_NAMES,
             text_prompts=ORDERED_TEXT_PROMPTS,
             processor=self.processor,
             device=self.device,
-            pretrained=False,  # 🔥 important
-            gcn_hidden=256,
+            pretrained=False,
+            gcn_hidden=256,   # ✅ MUST match training
             dropout=0.1,
             freeze_backbone=True,
             freeze_text_encoder=True,
@@ -67,7 +73,7 @@ class CottonLeafPredictor:
             text_proto_cls_weight=0.3,
         )
 
-        # 🔥 FIX
+        # 🔥 LOAD MODEL
         state = torch.load(weights_path, map_location="cpu")
         self.model.load_state_dict(state, strict=False)
 
