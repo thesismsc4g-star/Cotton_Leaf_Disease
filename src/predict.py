@@ -29,7 +29,7 @@ def download_model_if_needed(model_path: str):
     if not os.path.exists(model_path):
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
 
-        FILE_ID = "1mWD-qjyaE8Ti6JK3VsqcGDe9i1daEX9E"
+        FILE_ID = "19hs4HeRAOZ3UqQ2M9y8va2BMPvjFK19J"
 
         # ✅ Correct direct download link
         url = f"https://drive.google.com/uc?id={FILE_ID}"
