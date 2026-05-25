@@ -92,5 +92,5 @@ if uploaded_file is not None:
     # 🔥 ATTENTION MAP
     # ==============================
     if result.get("overlay") is not None:
-        st.subheader("🔥 Attention Map")
+        st.subheader("🔥 XAI / Explainable & Lime AI")
         st.image(result["overlay"], width="stretch")
