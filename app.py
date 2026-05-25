@@ -89,7 +89,7 @@ if uploaded_file is not None:
         st.progress(float(prob))
 
     # ==============================
-    # 🔥 ATTENTION MAP
+    # 🔥 XAI / Explainable & Lime AI
     # ==============================
     if result.get("overlay") is not None:
         st.subheader("🔥 XAI / Explainable & Lime AI")
