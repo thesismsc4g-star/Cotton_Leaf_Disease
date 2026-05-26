@@ -13,9 +13,6 @@ groq
 python-dotenv
 pypdf
 
-opencv-python-headless==4.8.1.78
-
-grad-cam
 lime
 scikit-image
 
