@@ -1,24 +1,15 @@
 torch
 torchvision
 transformers
-scikit-learn
 numpy
-pandas
 pillow
-tqdm
 matplotlib
 gdown
 streamlit
-groq
-python-dotenv
-pypdf
 
-lime
-scikit-image
+protobuf>=3.20.3,<4
 
 sentencepiece
 safetensors
-protobuf>=3.20.3,<4
-
 huggingface-hub
 tokenizers
