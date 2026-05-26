@@ -14,7 +14,10 @@ import torch.nn.functional as F
 
 from transformers import AutoProcessor
 
-import cv2
+try:
+    import cv2
+except Exception:
+    cv2 = None
 
 from lime import lime_image
 from skimage.segmentation import mark_boundaries
