@@ -1,41 +1,51 @@
 # ===== app.py =====
 
-import streamlit as st
-from PIL import Image
 import os
 import sys
 
-# ==================================
-# FIX PYTHON PATH
-# ==================================
-BASE_DIR = os.path.dirname(__file__)
+import torch
+torch.set_num_threads(1)
 
-sys.path.append(BASE_DIR)
+import streamlit as st
+from PIL import Image
 
-# ==================================
-# IMPORTS
-# ==================================
-import config
-
-from src.predict import load_predictor
-
-from prompts import (
-    CLASS_NAMES,
-    pretty_class_name
+# =====================================
+# PATH FIX
+# =====================================
+sys.path.append(
+    os.path.dirname(__file__)
 )
 
-# ==================================
+import config
+
+# =====================================
+# IMPORTS
+# =====================================
+try:
+    from src.predict import load_predictor
+    from prompts import (
+        CLASS_NAMES,
+        pretty_class_name
+    )
+except:
+    from predict import load_predictor
+    from prompts import (
+        CLASS_NAMES,
+        pretty_class_name
+    )
+
+# =====================================
 # PAGE CONFIG
-# ==================================
+# =====================================
 st.set_page_config(
     page_title="Cotton Leaf Disease Detection",
     page_icon="🌿",
     layout="centered"
 )
 
-# ==================================
+# =====================================
 # TITLE
-# ==================================
+# =====================================
 st.title(
     "🌿 Cotton Leaf Disease Detection"
 )
@@ -44,9 +54,9 @@ st.write(
     "Upload a cotton leaf image to detect disease."
 )
 
-# ==================================
+# =====================================
 # LOAD MODEL
-# ==================================
+# =====================================
 @st.cache_resource
 def get_model():
 
@@ -54,9 +64,9 @@ def get_model():
         config.MODEL_WEIGHTS
     )
 
-# ==================================
-# MODEL LOADING
-# ==================================
+# =====================================
+# LOAD WITH ERROR HANDLE
+# =====================================
 try:
 
     model = get_model()
@@ -71,21 +81,21 @@ except Exception as e:
         "❌ Model loading failed"
     )
 
-    st.exception(e)
+    st.code(str(e))
 
     st.stop()
 
-# ==================================
-# FILE UPLOADER
-# ==================================
+# =====================================
+# IMAGE UPLOAD
+# =====================================
 uploaded_file = st.file_uploader(
     "Upload leaf image",
     type=["jpg", "jpeg", "png"]
 )
 
-# ==================================
-# PREDICTION
-# ==================================
+# =====================================
+# PREDICT
+# =====================================
 if uploaded_file is not None:
 
     image = Image.open(
@@ -94,26 +104,26 @@ if uploaded_file is not None:
 
     st.image(
         image,
-        caption="📷 Uploaded Image",
+        caption="Uploaded Image",
         use_container_width=True
     )
 
-    with st.spinner("🔍 Predicting..."):
+    with st.spinner("Predicting..."):
 
         result = model.predict(image)
 
-    # ==============================
-    # PREDICTION RESULT
-    # ==============================
+    # =================================
+    # RESULT
+    # =================================
     st.success(
-        f"🌱 Prediction: {result['class_label']}"
+        f"Prediction: {result['class_label']}"
     )
 
-    # ==============================
+    # =================================
     # PROBABILITIES
-    # ==============================
+    # =================================
     st.subheader(
-        "📊 Class Probabilities"
+        "Class Probabilities"
     )
 
     probs = result["probabilities"]
@@ -130,26 +140,18 @@ if uploaded_file is not None:
             f"{display_name}: {prob*100:.2f}%"
         )
 
-        st.progress(float(prob))
+        st.progress(
+            float(prob)
+        )
 
-    # ==============================
+    # =================================
     # GRADCAM
-    # ==============================
-    st.subheader("🔥 Grad-CAM")
+    # =================================
+    st.subheader(
+        "🔥 GradCAM Visualization"
+    )
 
     st.image(
         result["gradcam"],
-        use_container_width=True
-    )
-
-    # ==============================
-    # LIME
-    # ==============================
-    st.subheader(
-        "🔥 LIME Explanation"
-    )
-
-    st.image(
-        result["lime"],
         use_container_width=True
     )
