@@ -38,6 +38,7 @@ from src.modeling import (
     ConvNeXtGCN_CLIP
 )
 
+
 # ==========================================
 # DOWNLOAD MODEL
 # ==========================================
@@ -98,6 +99,9 @@ class CottonLeafPredictor:
             freeze_text_encoder=True,
         )
 
+        # ==================================
+        # LOAD WEIGHTS
+        # ==================================
         state = torch.load(
             weights_path,
             map_location=self.device
@@ -117,7 +121,6 @@ class CottonLeafPredictor:
     # ======================================
     # PREDICT
     # ======================================
-    @torch.no_grad()
     def predict(self, image_pil: Image.Image) -> Dict:
 
         x = load_image_for_model(
@@ -125,30 +128,43 @@ class CottonLeafPredictor:
             self.eval_transform
         ).to(self.device)
 
-        outputs = self.model(x)
+        # ==================================
+        # ENABLE GRADIENT
+        # ==================================
+        with torch.enable_grad():
 
-        logits = (
-            outputs["contrastive_logits"]
-            + outputs["class_logits"]
-        )
+            x.requires_grad_(True)
 
-        probs = torch.softmax(
-            logits,
-            dim=1
-        )[0].cpu().numpy()
+            outputs = self.model(x)
 
-        pred_idx = int(
-            np.argmax(probs)
-        )
+            logits = (
+                outputs["contrastive_logits"]
+                + outputs["class_logits"]
+            )
 
-        class_name = CLASS_NAMES[pred_idx]
+            probs = torch.softmax(
+                logits,
+                dim=1
+            )[0].detach().cpu().numpy()
 
-        gradcam = self.generate_gradcam(
-            image_pil,
-            x,
-            pred_idx
-        )
+            pred_idx = int(
+                np.argmax(probs)
+            )
 
+            class_name = CLASS_NAMES[pred_idx]
+
+            # ==============================
+            # GRADCAM
+            # ==============================
+            gradcam = self.generate_gradcam(
+                image_pil,
+                x,
+                pred_idx
+            )
+
+        # ==================================
+        # LIME
+        # ==================================
         lime_result = self.generate_lime(
             image_pil
         )
@@ -183,6 +199,9 @@ class CottonLeafPredictor:
         features = []
         gradients = []
 
+        # ==================================
+        # HOOKS
+        # ==================================
         def forward_hook(module, inp, out):
             features.append(out)
 
@@ -201,6 +220,9 @@ class CottonLeafPredictor:
             backward_hook
         )
 
+        # ==================================
+        # FORWARD
+        # ==================================
         outputs = self.model(x)
 
         logits = (
@@ -212,16 +234,25 @@ class CottonLeafPredictor:
 
         self.model.zero_grad()
 
-        score.backward()
+        # ==================================
+        # BACKWARD
+        # ==================================
+        score.backward(retain_graph=True)
 
         fmap = features[0]
         grads = gradients[0]
 
+        # ==================================
+        # WEIGHTS
+        # ==================================
         weights = grads.mean(
             dim=(2, 3),
             keepdim=True
         )
 
+        # ==================================
+        # CAM
+        # ==================================
         cam = (
             weights * fmap
         ).sum(dim=1).squeeze()
@@ -239,6 +270,9 @@ class CottonLeafPredictor:
         fh.remove()
         bh.remove()
 
+        # ==================================
+        # RESIZE CAM
+        # ==================================
         cam_img = Image.fromarray(
             np.uint8(cam * 255)
         ).resize(config.IMAGE_SIZE)
@@ -305,7 +339,7 @@ class CottonLeafPredictor:
         return lime_result
 
     # ======================================
-    # LIME BATCH PREDICT
+    # BATCH PREDICT
     # ======================================
     def batch_predict(self, images):
 
@@ -349,7 +383,7 @@ class CottonLeafPredictor:
 
 
 # ==========================================
-# LOAD
+# LOAD PREDICTOR
 # ==========================================
 def load_predictor(weights_path: str):
 
