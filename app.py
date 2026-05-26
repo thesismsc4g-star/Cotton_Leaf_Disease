@@ -2,42 +2,51 @@
 
 import streamlit as st
 from PIL import Image
-import sys
 import os
+import sys
 
-sys.path.append(os.path.dirname(__file__))
+# ==================================
+# FIX PYTHON PATH
+# ==================================
+BASE_DIR = os.path.dirname(__file__)
 
+sys.path.append(BASE_DIR)
+
+# ==================================
+# IMPORTS
+# ==================================
 import config
 
-try:
-    from src.predict import load_predictor
-    from prompts import CLASS_NAMES, pretty_class_name
+from src.predict import load_predictor
 
-except:
+from prompts import (
+    CLASS_NAMES,
+    pretty_class_name
+)
 
-    from predict import load_predictor
-    from prompts import CLASS_NAMES, pretty_class_name
-
-
-# ==============================
+# ==================================
 # PAGE CONFIG
-# ==============================
+# ==================================
 st.set_page_config(
     page_title="Cotton Leaf Disease Detection",
     page_icon="🌿",
     layout="centered"
 )
 
-st.title("🌿 Cotton Leaf Disease Detection")
+# ==================================
+# TITLE
+# ==================================
+st.title(
+    "🌿 Cotton Leaf Disease Detection"
+)
 
 st.write(
     "Upload a cotton leaf image to detect disease."
 )
 
-
-# ==============================
+# ==================================
 # LOAD MODEL
-# ==============================
+# ==================================
 @st.cache_resource
 def get_model():
 
@@ -45,10 +54,9 @@ def get_model():
         config.MODEL_WEIGHTS
     )
 
-
-# ==============================
-# MODEL LOAD
-# ==============================
+# ==================================
+# MODEL LOADING
+# ==================================
 try:
 
     model = get_model()
@@ -63,19 +71,21 @@ except Exception as e:
         "❌ Model loading failed"
     )
 
-    st.code(str(e))
+    st.exception(e)
 
     st.stop()
 
-
-# ==============================
-# IMAGE UPLOAD
-# ==============================
+# ==================================
+# FILE UPLOADER
+# ==================================
 uploaded_file = st.file_uploader(
     "Upload leaf image",
     type=["jpg", "jpeg", "png"]
 )
 
+# ==================================
+# PREDICTION
+# ==================================
 if uploaded_file is not None:
 
     image = Image.open(
@@ -85,24 +95,26 @@ if uploaded_file is not None:
     st.image(
         image,
         caption="📷 Uploaded Image",
-        width="stretch"
+        use_container_width=True
     )
 
-    # ==========================
-    # PREDICTION
-    # ==========================
     with st.spinner("🔍 Predicting..."):
 
         result = model.predict(image)
 
+    # ==============================
+    # PREDICTION RESULT
+    # ==============================
     st.success(
         f"🌱 Prediction: {result['class_label']}"
     )
 
-    # ==========================
+    # ==============================
     # PROBABILITIES
-    # ==========================
-    st.subheader("📊 Class Probabilities")
+    # ==============================
+    st.subheader(
+        "📊 Class Probabilities"
+    )
 
     probs = result["probabilities"]
 
@@ -110,7 +122,9 @@ if uploaded_file is not None:
 
         class_name = CLASS_NAMES[i]
 
-        display_name = pretty_class_name(class_name)
+        display_name = pretty_class_name(
+            class_name
+        )
 
         st.write(
             f"{display_name}: {prob*100:.2f}%"
@@ -118,22 +132,24 @@ if uploaded_file is not None:
 
         st.progress(float(prob))
 
-    # ==========================
-    # 🔥 GRADCAM
-    # ==========================
+    # ==============================
+    # GRADCAM
+    # ==============================
     st.subheader("🔥 Grad-CAM")
 
     st.image(
         result["gradcam"],
-        width="stretch"
+        use_container_width=True
     )
 
-    # ==========================
-    # 🔥 LIME
-    # ==========================
-    st.subheader("🔥 LIME Explanation")
+    # ==============================
+    # LIME
+    # ==============================
+    st.subheader(
+        "🔥 LIME Explanation"
+    )
 
     st.image(
         result["lime"],
-        width="stretch"
+        use_container_width=True
     )
