@@ -60,5 +60,5 @@ The model predicts the disease
 View:
 ✅ Predicted disease name
 📊 Confidence scores
-🔥 Attention heatmap
+🔥 Explainable AI
 ```
