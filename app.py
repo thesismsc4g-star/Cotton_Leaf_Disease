@@ -4,8 +4,6 @@ import os
 import sys
 
 import torch
-
-# Limit CPU threads
 torch.set_num_threads(1)
 
 import streamlit as st
@@ -35,7 +33,6 @@ try:
     )
 
 except Exception:
-
     from predict import load_predictor
     from prompts import (
         CLASS_NAMES,
@@ -81,7 +78,7 @@ def get_model():
 
 
 # =====================================
-# LOAD MODEL WITH ERROR HANDLE
+# LOAD MODEL
 # =====================================
 
 try:
@@ -98,9 +95,7 @@ except Exception as e:
         "❌ Model loading failed"
     )
 
-    st.code(
-        str(e)
-    )
+    st.code(str(e))
 
     st.stop()
 
@@ -110,30 +105,73 @@ except Exception as e:
 # =====================================
 
 st.subheader(
-    "📷 Select Leaf Image"
-)
-
-st.write(
-    "You can take a photo using your camera "
-    "or upload an existing image."
+    "📷 Choose Image"
 )
 
 
 # =====================================
-# CAMERA INPUT
+# SESSION STATE
 # =====================================
 
-camera_file = st.camera_input(
-    "Take a photo of the cotton leaf"
-)
+if "camera_active" not in st.session_state:
+    st.session_state.camera_active = False
+
+
+if "camera_image" not in st.session_state:
+    st.session_state.camera_image = None
 
 
 # =====================================
-# FILE UPLOAD
+# TAKE PHOTO BUTTON
+# =====================================
+
+if not st.session_state.camera_active:
+
+    if st.button(
+        "📷 Take Photo",
+        use_container_width=True
+    ):
+
+        st.session_state.camera_active = True
+
+        st.rerun()
+
+
+# =====================================
+# CAMERA
+# =====================================
+
+if st.session_state.camera_active:
+
+    st.info(
+        "📸 Camera is ready. "
+        "Take a photo of the cotton leaf."
+    )
+
+    camera_file = st.camera_input(
+        "Take a photo"
+    )
+
+    # ---------------------------------
+    # PHOTO CAPTURED
+    # ---------------------------------
+
+    if camera_file is not None:
+
+        st.session_state.camera_image = camera_file
+
+        # Turn camera off after photo
+        st.session_state.camera_active = False
+
+        st.rerun()
+
+
+# =====================================
+# UPLOAD OPTION
 # =====================================
 
 uploaded_file = st.file_uploader(
-    "Or upload a leaf image",
+    "📁 Or upload a leaf image",
     type=[
         "jpg",
         "jpeg",
@@ -146,14 +184,19 @@ uploaded_file = st.file_uploader(
 # SELECT IMAGE
 # =====================================
 
-# Camera image gets priority
-# if both camera and upload are available.
+image_file = None
 
-image_file = (
-    camera_file
-    if camera_file is not None
-    else uploaded_file
-)
+
+# Camera image has priority
+if st.session_state.camera_image is not None:
+
+    image_file = (
+        st.session_state.camera_image
+    )
+
+elif uploaded_file is not None:
+
+    image_file = uploaded_file
 
 
 # =====================================
@@ -178,9 +221,7 @@ if image_file is not None:
             "❌ Unable to open image."
         )
 
-        st.code(
-            str(e)
-        )
+        st.code(str(e))
 
         st.stop()
 
@@ -201,7 +242,7 @@ if image_file is not None:
 
 
     # ---------------------------------
-    # PREDICTION
+    # PREDICT
     # ---------------------------------
 
     with st.spinner(
@@ -220,9 +261,7 @@ if image_file is not None:
                 "❌ Prediction failed."
             )
 
-            st.code(
-                str(e)
-            )
+            st.code(str(e))
 
             st.stop()
 
@@ -245,7 +284,7 @@ if image_file is not None:
 
 
     # =================================
-    # CLASS PROBABILITIES
+    # PROBABILITIES
     # =================================
 
     st.subheader(
@@ -259,26 +298,21 @@ if image_file is not None:
 
     for i, prob in enumerate(probs):
 
-        # Get class name
         class_name = CLASS_NAMES[i]
 
-        # Convert to readable name
         display_name = pretty_class_name(
             class_name
         )
 
-        # Percentage
         percentage = (
             float(prob) * 100
         )
 
-        # Display probability
         st.write(
             f"**{display_name}**: "
             f"{percentage:.2f}%"
         )
 
-        # Progress bar
         st.progress(
             min(
                 max(
@@ -317,9 +351,7 @@ if image_file is not None:
             "is not available."
         )
 
-        st.code(
-            str(e)
-        )
+        st.code(str(e))
 
 
 # =====================================
