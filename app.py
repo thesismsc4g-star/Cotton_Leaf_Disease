@@ -70,21 +70,29 @@ st.write(
 # =====================================
 
 # CLIP zero-shot candidate labels.
-# Index 0 MUST stay "cotton leaf" related — code below checks best_idx == 0/1.
+# NOTE: CLIP is only used for a COARSE check here (is this a leaf/plant
+# at all, vs a human/animal/random object). Fine-grained "is this
+# specifically a cotton leaf" is left to your own trained classifier,
+# because CLIP's generic zero-shot text embeddings cannot reliably
+# distinguish cotton leaves from other similarly-shaped lobed leaves
+# (grape, hibiscus, maple, etc.) -- that caused real cotton leaf images
+# to get wrongly rejected.
 CLIP_CANDIDATE_LABELS = [
-    "a close-up photo of a cotton plant leaf",
-    "a close-up photo of a cotton plant leaf with disease spots",
-    "a photo of a different (non-cotton) plant leaf",
+    "a close-up photo of a plant leaf",
     "a photo of a human face or a person",
     "a photo of an animal",
-    "a random photo unrelated to plants or leaves",
+    "a random photo unrelated to plants or leaves (object, document, screenshot, etc.)",
 ]
 
-# indices in CLIP_CANDIDATE_LABELS that count as "valid cotton leaf"
-VALID_LEAF_INDICES = {0, 1}
+# indices in CLIP_CANDIDATE_LABELS that count as "some kind of leaf/plant"
+VALID_LEAF_INDICES = {0}
 
-# minimum CLIP confidence to accept the image as a cotton leaf
-CLIP_ACCEPT_THRESHOLD = 0.45
+# minimum CLIP confidence to accept the image as a leaf/plant.
+# Kept low on purpose: we only want to catch CLEAR non-leaf images
+# (human, animal, random objects). Any actual leaf -- cotton or not --
+# should pass this gate; cotton-specific validation happens later
+# using your own trained classifier's confidence.
+CLIP_ACCEPT_THRESHOLD = 0.30
 
 # minimum classifier confidence to trust the disease prediction
 CLASSIFIER_ACCEPT_THRESHOLD = 0.55
@@ -170,8 +178,10 @@ except Exception as e:
 # OOD GATE FUNCTION
 # =====================================
 
-def is_cotton_leaf(image: Image.Image):
+def is_leaf_or_plant(image: Image.Image):
     """
+    Coarse OOD check only: is this image a leaf/plant at all,
+    vs a human, animal, or random unrelated object?
     Returns (is_valid: bool, confidence: float, best_label: str)
     """
 
@@ -349,18 +359,18 @@ if image_file is not None:
     if clip_gate_available:
 
         with st.spinner(
-            "🔎 Checking if this looks like a cotton leaf..."
+            "🔎 Checking if this looks like a leaf/plant image..."
         ):
 
-            is_valid, clip_conf, best_label = is_cotton_leaf(image)
+            is_valid, clip_conf, best_label = is_leaf_or_plant(image)
 
         if not is_valid:
 
             leaf_check_passed = False
 
             st.error(
-                "🚫 This image does not look like a cotton leaf. "
-                "Please upload or capture a clear cotton leaf image."
+                "🚫 This does not look like a leaf/plant image. "
+                "Please upload or capture a clear cotton leaf photo."
             )
 
             st.caption(
@@ -399,6 +409,24 @@ if image_file is not None:
         probs = result["probabilities"]
         max_prob = float(max(probs))
 
+        # Hard reject: classifier itself is very unsure -> likely not
+        # a cotton leaf (or a cotton leaf CLIP couldn't rule out, but
+        # the disease model doesn't recognize it either).
+        CLASSIFIER_REJECT_THRESHOLD = 0.35
+
+        if max_prob < CLASSIFIER_REJECT_THRESHOLD:
+
+            st.error(
+                "🚫 The model could not confidently match this image "
+                f"to any known cotton leaf class (max confidence: "
+                f"{max_prob*100:.1f}%). This may not be a cotton leaf, "
+                "or the photo quality/angle needs improvement."
+            )
+
+            leaf_check_passed = False
+
+
+    if leaf_check_passed and image_file is not None:
 
         # -----------------------------
         # LOW-CONFIDENCE CHECK
