@@ -359,8 +359,8 @@ if image_file is not None:
             leaf_check_passed = False
 
             st.error(
-                "🚫 এই ছবিটি cotton leaf বলে মনে হচ্ছে না। "
-                "অনুগ্রহ করে একটি স্পষ্ট cotton leaf image দিন।"
+                "🚫 This image does not look like a cotton leaf. "
+                "Please upload or capture a clear cotton leaf image."
             )
 
             st.caption(
@@ -409,8 +409,8 @@ if image_file is not None:
             st.warning(
                 "⚠️ Model is not confident enough about this image "
                 f"(max confidence: {max_prob*100:.1f}%). "
-                "ছবিটি ভালো angle/light-এ, cotton leaf-এর কাছাকাছি থেকে "
-                "আবার তুলে try করুন।"
+                "Try taking a clearer, closer photo of the cotton leaf "
+                "with good lighting."
             )
 
 
