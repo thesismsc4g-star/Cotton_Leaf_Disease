@@ -66,7 +66,32 @@ st.write(
 
 
 # =====================================
-# LOAD MODEL
+# CONFIG: OOD GATE SETTINGS
+# =====================================
+
+# CLIP zero-shot candidate labels.
+# Index 0 MUST stay "cotton leaf" related — code below checks best_idx == 0/1.
+CLIP_CANDIDATE_LABELS = [
+    "a close-up photo of a cotton plant leaf",
+    "a close-up photo of a cotton plant leaf with disease spots",
+    "a photo of a different (non-cotton) plant leaf",
+    "a photo of a human face or a person",
+    "a photo of an animal",
+    "a random photo unrelated to plants or leaves",
+]
+
+# indices in CLIP_CANDIDATE_LABELS that count as "valid cotton leaf"
+VALID_LEAF_INDICES = {0, 1}
+
+# minimum CLIP confidence to accept the image as a cotton leaf
+CLIP_ACCEPT_THRESHOLD = 0.45
+
+# minimum classifier confidence to trust the disease prediction
+CLASSIFIER_ACCEPT_THRESHOLD = 0.55
+
+
+# =====================================
+# LOAD DISEASE MODEL
 # =====================================
 
 @st.cache_resource
@@ -76,10 +101,6 @@ def get_model():
         config.MODEL_WEIGHTS
     )
 
-
-# =====================================
-# LOAD MODEL
-# =====================================
 
 try:
 
@@ -98,6 +119,84 @@ except Exception as e:
     st.code(str(e))
 
     st.stop()
+
+
+# =====================================
+# LOAD CLIP GATE MODEL (cached, separate from disease model)
+# =====================================
+
+@st.cache_resource
+def get_clip_gate():
+    """
+    Loads a small CLIP model purely for zero-shot
+    'is this actually a cotton leaf?' filtering.
+    Uses HuggingFace transformers so it works out-of-the-box
+    on Streamlit Cloud with just `transformers` in requirements.txt.
+    """
+
+    from transformers import CLIPModel, CLIPProcessor
+
+    clip_model = CLIPModel.from_pretrained(
+        "openai/clip-vit-base-patch32"
+    )
+
+    clip_processor = CLIPProcessor.from_pretrained(
+        "openai/clip-vit-base-patch32"
+    )
+
+    clip_model.eval()
+
+    return clip_model, clip_processor
+
+
+try:
+
+    clip_model, clip_processor = get_clip_gate()
+    clip_gate_available = True
+
+except Exception as e:
+
+    # If CLIP gate fails to load (e.g. no internet on first run),
+    # don't crash the whole app — just skip the OOD check.
+    clip_gate_available = False
+    st.warning(
+        "⚠️ Image-validity check (CLIP gate) could not be loaded. "
+        "Predictions will run without the extra safety filter."
+    )
+    st.code(str(e))
+
+
+# =====================================
+# OOD GATE FUNCTION
+# =====================================
+
+def is_cotton_leaf(image: Image.Image):
+    """
+    Returns (is_valid: bool, confidence: float, best_label: str)
+    """
+
+    inputs = clip_processor(
+        text=CLIP_CANDIDATE_LABELS,
+        images=image,
+        return_tensors="pt",
+        padding=True
+    )
+
+    with torch.no_grad():
+        outputs = clip_model(**inputs)
+        logits_per_image = outputs.logits_per_image
+        probs = logits_per_image.softmax(dim=-1)[0]
+
+    best_idx = int(torch.argmax(probs).item())
+    confidence = float(probs[best_idx].item())
+    best_label = CLIP_CANDIDATE_LABELS[best_idx]
+
+    is_valid = (
+        best_idx in VALID_LEAF_INDICES
+        and confidence >= CLIP_ACCEPT_THRESHOLD
+    )
+
+    return is_valid, confidence, best_label
 
 
 # =====================================
@@ -236,122 +335,166 @@ if image_file is not None:
 
     st.image(
         image,
-        caption="Cotton Leaf Image",
+        caption="Selected Image",
         use_container_width=True
     )
 
 
     # ---------------------------------
-    # PREDICT
+    # OOD GATE CHECK
     # ---------------------------------
 
-    with st.spinner(
-        "🔍 Analyzing the cotton leaf..."
-    ):
+    leaf_check_passed = True
+
+    if clip_gate_available:
+
+        with st.spinner(
+            "🔎 Checking if this looks like a cotton leaf..."
+        ):
+
+            is_valid, clip_conf, best_label = is_cotton_leaf(image)
+
+        if not is_valid:
+
+            leaf_check_passed = False
+
+            st.error(
+                "🚫 এই ছবিটি cotton leaf বলে মনে হচ্ছে না। "
+                "অনুগ্রহ করে একটি স্পষ্ট cotton leaf image দিন।"
+            )
+
+            st.caption(
+                f"Detected as: *{best_label}* "
+                f"(confidence: {clip_conf*100:.1f}%)"
+            )
+
+
+    # ---------------------------------
+    # PREDICT (only if gate passed)
+    # ---------------------------------
+
+    if leaf_check_passed:
+
+        with st.spinner(
+            "🔍 Analyzing the cotton leaf..."
+        ):
+
+            try:
+
+                result = model.predict(
+                    image
+                )
+
+            except Exception as e:
+
+                st.error(
+                    "❌ Prediction failed."
+                )
+
+                st.code(str(e))
+
+                st.stop()
+
+
+        probs = result["probabilities"]
+        max_prob = float(max(probs))
+
+
+        # -----------------------------
+        # LOW-CONFIDENCE CHECK
+        # -----------------------------
+
+        if max_prob < CLASSIFIER_ACCEPT_THRESHOLD:
+
+            st.warning(
+                "⚠️ Model is not confident enough about this image "
+                f"(max confidence: {max_prob*100:.1f}%). "
+                "ছবিটি ভালো angle/light-এ, cotton leaf-এর কাছাকাছি থেকে "
+                "আবার তুলে try করুন।"
+            )
+
+
+        # =================================
+        # RESULT
+        # =================================
+
+        st.subheader(
+            "🩺 Detection Result"
+        )
+
+        predicted_class = result[
+            "class_label"
+        ]
+
+        st.success(
+            f"🌿 Prediction: {predicted_class}"
+        )
+
+
+        # =================================
+        # PROBABILITIES
+        # =================================
+
+        st.subheader(
+            "📊 Class Probabilities"
+        )
+
+        for i, prob in enumerate(probs):
+
+            class_name = CLASS_NAMES[i]
+
+            display_name = pretty_class_name(
+                class_name
+            )
+
+            percentage = (
+                float(prob) * 100
+            )
+
+            st.write(
+                f"**{display_name}**: "
+                f"{percentage:.2f}%"
+            )
+
+            st.progress(
+                min(
+                    max(
+                        float(prob),
+                        0.0
+                    ),
+                    1.0
+                )
+            )
+
+
+        # =================================
+        # GRADCAM
+        # =================================
+
+        st.subheader(
+            "🔥 GradCAM Visualization"
+        )
 
         try:
 
-            result = model.predict(
-                image
+            gradcam_image = result[
+                "gradcam"
+            ]
+
+            st.image(
+                gradcam_image,
+                caption="GradCAM - Model Attention Visualization",
+                use_container_width=True
             )
 
         except Exception as e:
 
-            st.error(
-                "❌ Prediction failed."
+            st.warning(
+                "⚠️ GradCAM visualization "
+                "is not available."
             )
 
             st.code(str(e))
-
-            st.stop()
-
-
-    # =================================
-    # RESULT
-    # =================================
-
-    st.subheader(
-        "🩺 Detection Result"
-    )
-
-    predicted_class = result[
-        "class_label"
-    ]
-
-    st.success(
-        f"🌿 Prediction: {predicted_class}"
-    )
-
-
-    # =================================
-    # PROBABILITIES
-    # =================================
-
-    st.subheader(
-        "📊 Class Probabilities"
-    )
-
-    probs = result[
-        "probabilities"
-    ]
-
-
-    for i, prob in enumerate(probs):
-
-        class_name = CLASS_NAMES[i]
-
-        display_name = pretty_class_name(
-            class_name
-        )
-
-        percentage = (
-            float(prob) * 100
-        )
-
-        st.write(
-            f"**{display_name}**: "
-            f"{percentage:.2f}%"
-        )
-
-        st.progress(
-            min(
-                max(
-                    float(prob),
-                    0.0
-                ),
-                1.0
-            )
-        )
-
-
-    # =================================
-    # GRADCAM
-    # =================================
-
-    st.subheader(
-        "🔥 GradCAM Visualization"
-    )
-
-    try:
-
-        gradcam_image = result[
-            "gradcam"
-        ]
-
-        st.image(
-            gradcam_image,
-            caption="GradCAM - Model Attention Visualization",
-            use_container_width=True
-        )
-
-    except Exception as e:
-
-        st.warning(
-            "⚠️ GradCAM visualization "
-            "is not available."
-        )
-
-        st.code(str(e))
 
 
 # =====================================
